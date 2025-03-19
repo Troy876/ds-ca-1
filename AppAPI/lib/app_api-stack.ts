@@ -6,7 +6,7 @@ import * as custom from "aws-cdk-lib/custom-resources";
 import { Construct } from "constructs";
 import * as apig from "aws-cdk-lib/aws-apigateway";
 import { generateBatch } from "../shared/utils";
-import { games } from "../seed/games";
+import { games, gameStudios } from "../seed/games";
 
 export class AppApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -16,6 +16,14 @@ export class AppApiStack extends cdk.Stack {
       partitionKey: { name: "id", type: dynamodb.AttributeType.NUMBER },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       tableName: "Games",
+    });
+
+    const gameStudiosTable = new dynamodb.Table(this, "GameStudiosTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "gameId", type: dynamodb.AttributeType.NUMBER },
+      sortKey: { name: "studioName", type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "GameStudio",
     });
 
     const getAllGamesFn = new lambdanode.NodejsFunction(this, "GetAllGamesFn", {
@@ -42,6 +50,22 @@ export class AppApiStack extends cdk.Stack {
       },
     });
 
+    const getGameStudioFn = new lambdanode.NodejsFunction(
+      this,
+      "GetGameStudioFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        entry: `${__dirname}/../lambdas/getGameStudio.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: gameStudiosTable.tableName,
+          REGION: "eu-west-1",
+        },
+      }
+    );
+
     new custom.AwsCustomResource(this, "gamesddbInitData", {
       onCreate: {
         service: "DynamoDB",
@@ -49,17 +73,19 @@ export class AppApiStack extends cdk.Stack {
         parameters: {
           RequestItems: {
             [gamesTable.tableName]: generateBatch(games),
+            [gameStudiosTable.tableName]: generateBatch(gameStudios),
           },
         },
         physicalResourceId: custom.PhysicalResourceId.of("gamesddbInitData"),
       },
       policy: custom.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: [gamesTable.tableArn],
+        resources: [gamesTable.tableArn, gameStudiosTable.tableArn],
       }),
     });
 
     gamesTable.grantReadData(getAllGamesFn);
     gamesTable.grantReadWriteData(newGameFn);
+    gameStudiosTable.grantReadData(getGameStudioFn);
 
     const api = new apig.RestApi(this, "AppAPI", {
       description: "app api",
@@ -77,6 +103,12 @@ export class AppApiStack extends cdk.Stack {
     gamesEndpoint.addMethod(
       "POST",
       new apig.LambdaIntegration(newGameFn, { proxy: true })
+    );
+
+    const gameStudioEndpoint = gamesEndpoint.addResource("studio");
+    gameStudioEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getGameStudioFn, { proxy: true })
     );
   }
 }
