@@ -4,3 +4,15 @@ export type Game = {
     description: string,
     mature: boolean
 }
+
+export type GameStudio = {
+    gameId: number;
+    studioName: string;
+    primaryGenre: string;
+}
+
+export type GameStudioQueryParams = {
+    gameId: number;
+    studioName?: string;
+    primaryGenre?: string;
+}
