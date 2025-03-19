@@ -12,7 +12,7 @@ export type GameStudio = {
 }
 
 export type GameStudioQueryParams = {
-    gameId: number;
+    gameId: string;
     studioName?: string;
     primaryGenre?: string;
 }
