@@ -66,6 +66,18 @@ export class AppApiStack extends cdk.Stack {
       }
     );
 
+    const updateGameFn = new lambdanode.NodejsFunction(this, "UpdateGameFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: `${__dirname}/../lambdas/updateGame.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: gamesTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
+
     new custom.AwsCustomResource(this, "gamesddbInitData", {
       onCreate: {
         service: "DynamoDB",
@@ -86,6 +98,7 @@ export class AppApiStack extends cdk.Stack {
     gamesTable.grantReadData(getAllGamesFn);
     gamesTable.grantReadWriteData(newGameFn);
     gameStudiosTable.grantReadData(getGameStudioFn);
+    gamesTable.grantReadWriteData(updateGameFn);
 
     const api = new apig.RestApi(this, "AppAPI", {
       description: "app api",
@@ -109,6 +122,12 @@ export class AppApiStack extends cdk.Stack {
     gameStudioEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getGameStudioFn, { proxy: true })
+    );
+
+    const updateGameEndpoint = gamesEndpoint.addResource("update");
+    updateGameEndpoint.addMethod(
+      "PUT",
+      new apig.LambdaIntegration(updateGameFn, { proxy: true })
     );
   }
 }
