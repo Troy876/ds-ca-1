@@ -7,6 +7,7 @@ import { Construct } from "constructs";
 import * as apig from "aws-cdk-lib/aws-apigateway";
 import { generateBatch } from "../shared/utils";
 import { games, gameStudios } from "../seed/games";
+import * as iam from "aws-cdk-lib/aws-iam";
 
 export class AppApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -98,6 +99,14 @@ export class AppApiStack extends cdk.Stack {
         REGION: "eu-west-1",
       },
     });
+
+    translateGameFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["translate:TranslateText"],
+        resources: ["*"],
+      })
+    );
 
     new custom.AwsCustomResource(this, "gamesddbInitData", {
       onCreate: {
