@@ -147,7 +147,8 @@ export class AppApiStack extends cdk.Stack {
 
     gamesEndpoint.addMethod(
       "POST",
-      new apig.LambdaIntegration(newGameFn, { proxy: true })
+      new apig.LambdaIntegration(newGameFn, { proxy: true }),
+      { apiKeyRequired: true }
     );
 
     const gameStudioEndpoint = gamesEndpoint.addResource("studio");
@@ -159,7 +160,8 @@ export class AppApiStack extends cdk.Stack {
     const updateGameEndpoint = gamesEndpoint.addResource("update");
     updateGameEndpoint.addMethod(
       "PUT",
-      new apig.LambdaIntegration(updateGameFn, { proxy: true })
+      new apig.LambdaIntegration(updateGameFn, { proxy: true }),
+      { apiKeyRequired: true }
     );
 
     const translationEndpoint = gamesEndpoint.addResource("{gameId}").addResource("translate");
