@@ -26,6 +26,14 @@ export class AppApiStack extends cdk.Stack {
       tableName: "GameStudio",
     });
 
+    const gameTranslationTable = new dynamodb.Table(this, "GameTranslationTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "gameId", type: dynamodb.AttributeType.NUMBER },
+      sortKey: { name: "languageCode", type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "GameTranslations",
+    });
+
     const getAllGamesFn = new lambdanode.NodejsFunction(this, "GetAllGamesFn", {
       architecture: lambda.Architecture.ARM_64,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -78,6 +86,19 @@ export class AppApiStack extends cdk.Stack {
       },
     });
 
+    const translateGameFn = new lambdanode.NodejsFunction(this, "TranslateGameFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: `${__dirname}/../lambdas/translateGame.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        GAMES_TABLE_NAME: gamesTable.tableName,
+        TRANSLATIONS_TABLE_NAME: gameTranslationTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
+
     new custom.AwsCustomResource(this, "gamesddbInitData", {
       onCreate: {
         service: "DynamoDB",
@@ -99,6 +120,8 @@ export class AppApiStack extends cdk.Stack {
     gamesTable.grantReadWriteData(newGameFn);
     gameStudiosTable.grantReadData(getGameStudioFn);
     gamesTable.grantReadWriteData(updateGameFn);
+    gamesTable.grantReadData(translateGameFn);
+    gameTranslationTable.grantReadWriteData(translateGameFn);
 
     const api = new apig.RestApi(this, "AppAPI", {
       description: "app api",
@@ -128,6 +151,12 @@ export class AppApiStack extends cdk.Stack {
     updateGameEndpoint.addMethod(
       "PUT",
       new apig.LambdaIntegration(updateGameFn, { proxy: true })
+    );
+
+    const translationEndpoint = gamesEndpoint.addResource("{gameId}").addResource("translate");
+    translationEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(translateGameFn, { proxy: true })
     );
   }
 }
